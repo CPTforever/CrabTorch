@@ -1,6 +1,6 @@
 use std::fmt::{Debug, Display};
 
-// Super basic error struct, can make better later
+// Super basic error struct, can make better later (famous last words)
 pub struct TensorError {
     pub message: String
 }
