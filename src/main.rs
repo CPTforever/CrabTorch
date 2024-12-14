@@ -17,5 +17,7 @@ fn main() -> Result<(), TensorError> {
     println!("{}", reshaped);
     println!("{}", verical);
 
+    let zeros = Tensor::<f32>::rand([8, 8, 8]);
+    println!("zeros: {}", zeros);
     Ok(())
 }
