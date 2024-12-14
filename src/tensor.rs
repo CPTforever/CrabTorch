@@ -124,6 +124,8 @@ impl<T> Tensor<T>
 
         Tensor {
             data: Rc::new(RefCell::new((0..size).map(|_| rng.gen()).collect())),
+            base_index: 0,
+            size: size,
             strides: strides,
             shape: _shape
         }
