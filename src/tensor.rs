@@ -1,5 +1,7 @@
 use std::{cell::RefCell, fmt::Display, rc::Rc};
 
+use rand::{distributions::Standard, prelude::Distribution, Rng};
+
 use crate::error::TensorError;
 
 #[derive(Clone, Debug)]
@@ -109,6 +111,23 @@ impl<T: Clone> Tensor<T> {
     pub fn scalar(value: T) -> Tensor<T> {
         Self::from_shape(value, &[])
     }
+}
+
+impl<T> Tensor<T> 
+    where
+    Standard: Distribution<T>,{
+    
+    pub fn rand<S: Into<Vec<usize>>>(shape: S) -> Tensor<T> {
+        let _shape: Vec<usize> = shape.into();
+        let (size, strides) = get_size_and_strides(_shape.as_slice());
+        let mut rng = rand::thread_rng();
+
+        Tensor {
+            data: Rc::new(RefCell::new((0..size).map(|_| rng.gen()).collect())),
+            strides: strides,
+            shape: _shape
+        }
+    } 
 }
 
 impl<T: Display> Display for Tensor<T> {
