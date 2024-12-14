@@ -1,5 +1,7 @@
 use std::{cell::RefCell, fmt::Display, rc::Rc};
 
+use num::CheckedAdd;
+use num_traits::AsPrimitive;
 use rand::{distributions::Standard, prelude::Distribution, Rng};
 
 use crate::error::TensorError;
@@ -107,6 +109,61 @@ impl<T: Clone> Tensor<T> {
 
     pub fn scalar(value: T) -> Tensor<T> {
         Self::from_shape(value, &[])
+    }
+}
+
+// This is like gay people in the military, don't ask don't tell
+impl<T> Tensor<T> where 
+    T: num_traits::cast::AsPrimitive<T>,
+    isize: num_traits::cast::AsPrimitive<T> {
+    pub fn step_range(range: num::iter::RangeStep<isize>) -> Tensor<T> {
+        let voo: Vec<T> = range.map(|x| isize::as_(x)).collect();
+        let _shape = vec![voo.len()];
+        let (size, strides) = get_size_and_strides(&_shape);
+
+        let foo = Rc::new(RefCell::new(voo));
+        Tensor {
+            data: foo,
+            strides: strides,
+            shape: _shape,
+            base_index: 0,
+            size,
+        }
+    }
+
+    pub fn arange(range: std::ops::Range<isize>) -> Tensor<T> {
+        let voo: Vec<T> = range.map(|x| isize::as_(x)).collect();
+        let _shape = vec![voo.len()];
+        let (size, strides) = get_size_and_strides(&_shape);
+
+        let foo = Rc::new(RefCell::new(voo));
+        Tensor {
+            data: foo,
+            strides: strides,
+            shape: _shape,
+            base_index: 0,
+            size,
+        }
+    }
+}
+
+// Be careful with this, I stole it.
+impl<T: num_traits::Float + From<u32>> Tensor<T> {
+    pub fn linspace(x0: T, xend: T, n: u32) -> Tensor<T> {
+        let to_float = |i: u32| i.try_into().unwrap_or_else(|_| panic!());
+        let dx = (xend - x0) / to_float(n - 1);
+        let vec: Vec<T> = (0..n).map(|i| x0 + to_float(i) * dx).collect();
+
+        let _shape = vec![vec.len()];
+        let (size, strides) = get_size_and_strides(&_shape);
+        let foo = Rc::new(RefCell::new(vec));
+        Tensor {
+            data: foo,
+            strides: strides,
+            shape: _shape,
+            base_index: 0,
+            size,
+        }
     }
 }
 

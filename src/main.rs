@@ -2,6 +2,7 @@ mod tensor;
 mod error;
 
 use error::TensorError;
+use num::{iter::{Range, RangeStep}, range_step};
 use tensor::Tensor;
 
 fn main() -> Result<(), TensorError> {
@@ -22,6 +23,15 @@ fn main() -> Result<(), TensorError> {
     println!("{}", verical);
 
     let zeros = Tensor::<f32>::rand(&[8, 8, 8]);
-    println!("zeros: {}", zeros);
+    println!("zeros: {}", &zeros);
+
+    let zeros = Tensor::<f64>::step_range(range_step(0, 1000, 1));
+    println!("zeros: {}", &zeros);
+
+    let zeros = Tensor::<f64>::arange(-100..100);
+    println!("zeros: {}", &zeros);
+
+    let zeros = Tensor::<f64>::linspace(-1000000.0, 10000000.0, 100);
+    println!("zeros: {}", &zeros);
     Ok(())
 }
