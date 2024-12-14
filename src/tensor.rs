@@ -68,9 +68,8 @@ impl<T> Tensor<T> {
         self.rank() == 0
     }
 
-    pub fn reshape<S: Into<Vec<usize>>>(&self, new_shape: S) -> Result<Tensor<T>, TensorError> {
-        let _shape: Vec<usize> = new_shape.into();
-        let (size, strides) = get_size_and_strides(_shape.as_slice());
+    pub fn reshape(&self, new_shape: &[usize]) -> Result<Tensor<T>, TensorError> {
+        let (size, strides) = get_size_and_strides(new_shape);
         if size != self.size {
             return Err(TensorError::new("new shape cannot be of a different size"))
         }
@@ -78,33 +77,31 @@ impl<T> Tensor<T> {
             data: self.data.clone(),
             base_index: 0,
             size: self.size,
-            shape: _shape,
+            shape: new_shape.to_vec(),
             strides: strides
         })
     }
 }
 
 impl<T: Clone> Tensor<T> {
-    pub fn from_shape<S: Into<Vec<usize>>>(value: T, shape: S) -> Tensor<T> {
-        let _shape: Vec<usize> = shape.into();
-        let (size, strides) = get_size_and_strides(_shape.as_slice());
+    pub fn from_shape(value: T, shape: &[usize]) -> Tensor<T> {
+        let (size, strides) = get_size_and_strides(shape);
         Tensor {
             data: Rc::new(RefCell::new(vec![value; size])),
             base_index: 0,
             size: size,
             strides: strides,
-            shape: _shape
+            shape: shape.to_vec()
         }
     }
 
-    pub fn from_array<A: Into<Vec<T>>>(arr: A) -> Tensor<T> {
-        let _arr = arr.into();
+    pub fn from_array(arr: &[T]) -> Tensor<T> {
         Tensor {
             base_index: 0,
             strides: vec![1],
-            shape: vec![_arr.len()],
-            size: _arr.len(),
-            data: Rc::new(RefCell::new(_arr))
+            shape: vec![arr.len()],
+            size: arr.len(),
+            data: Rc::new(RefCell::new(arr.to_vec()))
         }
     }
 
@@ -117,17 +114,15 @@ impl<T> Tensor<T>
     where
     Standard: Distribution<T>,{
     
-    pub fn rand<S: Into<Vec<usize>>>(shape: S) -> Tensor<T> {
-        let _shape: Vec<usize> = shape.into();
-        let (size, strides) = get_size_and_strides(_shape.as_slice());
+    pub fn rand(shape: &[usize]) -> Tensor<T> {
+        let (size, strides) = get_size_and_strides(shape);
         let mut rng = rand::thread_rng();
-
         Tensor {
             data: Rc::new(RefCell::new((0..size).map(|_| rng.gen()).collect())),
             base_index: 0,
             size: size,
             strides: strides,
-            shape: _shape
+            shape: shape.to_vec()
         }
     } 
 }
