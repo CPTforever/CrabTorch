@@ -1,6 +1,5 @@
 use std::{cell::RefCell, fmt::Display, rc::Rc};
 
-use num::CheckedAdd;
 use num_traits::AsPrimitive;
 use rand::{distributions::Standard, prelude::Distribution, Rng};
 
@@ -181,7 +180,7 @@ impl<T> Tensor<T>
             strides: strides,
             shape: shape.to_vec()
         }
-    } 
+    }
 }
 
 impl<T: Display> Display for Tensor<T> {
@@ -226,5 +225,86 @@ impl<T: Display> Display for Tensor<T> {
             }
         }
         Ok(())
+    }
+}
+
+/* This is used internally to efficiently iterate through the
+   data indices of a tensor in the correct order */
+struct TensorIndexIterator<T> {
+    pub tensor: Tensor<T>,
+    index: Vec<usize>,
+    data_index: usize,
+    is_done: bool
+}
+
+impl<T> TensorIndexIterator<T> {
+    fn new(tensor: Tensor<T>) -> TensorIndexIterator<T> {
+        TensorIndexIterator {
+            index: vec![0 as usize; tensor.rank()],
+            data_index: tensor.base_index,
+            tensor: tensor,
+            is_done: false
+        }
+    }
+}
+
+impl<T> Iterator for TensorIndexIterator<T> {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.is_done {
+            return None;
+        }
+        let result = self.data_index;
+        for d in (0..self.tensor.rank()).rev() {
+            self.index[d] += 1;
+            self.data_index += self.tensor.strides[d];
+            if self.index[d] >= self.tensor.shape[d] {
+                self.index[d] = 0;
+                self.data_index -= self.tensor.shape[d] * self.tensor.strides[d];
+                if d == 0 {
+                    self.is_done = true;
+                }
+            } else {
+                break;
+            }
+        }
+        Some(result)
+    }
+}
+
+pub struct TensorIterator<T> {
+    index_iterator: TensorIndexIterator<T>
+}
+
+impl<'a, T> TensorIterator<T> {
+    pub fn new(tensor: Tensor<T>) -> TensorIterator<T> {
+        TensorIterator {
+            index_iterator: TensorIndexIterator::new(tensor)
+        }
+    }
+}
+
+impl<T: Clone> Iterator for TensorIterator<T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.index_iterator.next() {
+            Some(index) => {
+                let data = self.index_iterator.tensor.data.borrow();
+                Some(data[index].clone())
+            },
+            None => None
+        }
+    }
+}
+
+impl<T: Clone> IntoIterator for Tensor<T> {
+    type Item = T;
+
+    type IntoIter = TensorIterator<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        TensorIterator::new(self)
     }
 }
