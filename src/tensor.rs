@@ -1,6 +1,5 @@
-use std::{cell::RefCell, fmt::Display, rc::Rc};
+use std::{cell::RefCell, fmt::Display, ops::{Add, Div, Mul, Sub}, rc::Rc};
 
-use num_traits::AsPrimitive;
 use rand::{distributions::Standard, prelude::Distribution, Rng};
 
 use crate::error::TensorError;
@@ -25,7 +24,7 @@ fn get_size_and_strides(shape: &[usize]) -> (usize, Vec<usize>) {
 }
 
 impl<T> Tensor<T> {
-    pub fn get_data_index(&self, index: &[usize], tile: bool) -> Result<usize, TensorError> {
+    fn get_data_index(&self, index: &[usize], tile: bool) -> Result<usize, TensorError> {
         if index.len() > self.shape.len() {
             return Err(TensorError::new("index has too many dimensions"));
         }
@@ -44,11 +43,13 @@ impl<T> Tensor<T> {
 
     pub fn get(&self, index: &[usize]) -> Result<Tensor<T>, TensorError> {
         let base_index = self.get_data_index(index, false)?;
+        let new_shape = self.shape[index.len()..].to_vec();
+        let (new_size, _) = get_size_and_strides(&new_shape);
         Ok(Tensor {
             data: self.data.clone(),
             base_index: base_index,
-            size: self.strides[index.len() - 1],
-            shape: self.shape[index.len()..].to_vec(),
+            size: new_size,
+            shape: new_shape,
             strides: self.strides[index.len()..].to_vec()
         })
     }
@@ -76,11 +77,28 @@ impl<T> Tensor<T> {
         }
         Ok(Tensor {
             data: self.data.clone(),
-            base_index: 0,
+            base_index: self.base_index,
             size: self.size,
             shape: new_shape.to_vec(),
             strides: strides
         })
+    }
+
+    pub fn flatten(&self) -> Result<Tensor<T>, TensorError> {
+        self.reshape(&[self.size])
+    }
+}
+
+impl<A> FromIterator<A> for Tensor<A>  {
+    fn from_iter<T: IntoIterator<Item=A>>(iter: T) -> Self {
+        let v: Vec<A> = iter.into_iter().collect();
+        return Tensor {
+            size: v.len(),
+            shape: vec![v.len()],
+            data: Rc::new(RefCell::new(v)),
+            base_index: 0,
+            strides: vec![1]
+        };
     }
 }
 
@@ -109,67 +127,35 @@ impl<T: Clone> Tensor<T> {
     pub fn scalar(value: T) -> Tensor<T> {
         Self::from_shape(value, &[])
     }
-}
 
-// This is like gay people in the military, don't ask don't tell
-impl<T> Tensor<T> where 
-    T: num_traits::cast::AsPrimitive<T>,
-    isize: num_traits::cast::AsPrimitive<T> {
-    pub fn step_range(range: num::iter::RangeStep<isize>) -> Tensor<T> {
-        let voo: Vec<T> = range.map(|x| isize::as_(x)).collect();
-        let _shape = vec![voo.len()];
-        let (size, strides) = get_size_and_strides(&_shape);
-
-        let foo = Rc::new(RefCell::new(voo));
-        Tensor {
-            data: foo,
-            strides: strides,
-            shape: _shape,
-            base_index: 0,
-            size,
+    pub fn deep_clone(&self) -> Tensor<T> {
+        let mut new_data = Vec::<T>::with_capacity(self.size);
+        let new_shape =  self.shape.clone();
+        for v in self.clone() {
+            new_data.push(v);
         }
-    }
-
-    pub fn arange(range: std::ops::Range<isize>) -> Tensor<T> {
-        let voo: Vec<T> = range.map(|x| isize::as_(x)).collect();
-        let _shape = vec![voo.len()];
-        let (size, strides) = get_size_and_strides(&_shape);
-
-        let foo = Rc::new(RefCell::new(voo));
+        let (size, strides) = get_size_and_strides(&new_shape);
         Tensor {
-            data: foo,
-            strides: strides,
-            shape: _shape,
+            data: Rc::new(RefCell::new(new_data)),
             base_index: 0,
-            size,
+            size: size,
+            shape: new_shape,
+            strides: strides
         }
     }
 }
 
-// Be careful with this, I stole it.
-impl<T: num_traits::Float + From<u32>> Tensor<T> {
+impl<T> Tensor<T>
+where T: Clone + From<u32> + Add<Output=T> + Sub<Output=T> + Mul<Output=T> + Div<Output=T>
+{
     pub fn linspace(x0: T, xend: T, n: u32) -> Tensor<T> {
-        let to_float = |i: u32| i.try_into().unwrap_or_else(|_| panic!());
-        let dx = (xend - x0) / to_float(n - 1);
-        let vec: Vec<T> = (0..n).map(|i| x0 + to_float(i) * dx).collect();
-
-        let _shape = vec![vec.len()];
-        let (size, strides) = get_size_and_strides(&_shape);
-        let foo = Rc::new(RefCell::new(vec));
-        Tensor {
-            data: foo,
-            strides: strides,
-            shape: _shape,
-            base_index: 0,
-            size,
-        }
+        let n_as_t = T::from(n);
+        let dx = (xend - x0.clone()) / n_as_t;
+        Self::from_iter((0..n).map(|x| x0.clone() + T::from(x) * dx.clone()))
     }
 }
 
-impl<T> Tensor<T> 
-    where
-    Standard: Distribution<T>,{
-    
+impl<T> Tensor<T> where Standard: Distribution<T> {
     pub fn rand(shape: &[usize]) -> Tensor<T> {
         let (size, strides) = get_size_and_strides(shape);
         let mut rng = rand::thread_rng();
@@ -306,5 +292,15 @@ impl<T: Clone> IntoIterator for Tensor<T> {
 
     fn into_iter(self) -> Self::IntoIter {
         TensorIterator::new(self)
+    }
+}
+
+impl<T: Clone> IntoIterator for &Tensor<T> {
+    type Item = T;
+
+    type IntoIter = TensorIterator<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        TensorIterator::new(self.clone())
     }
 }
